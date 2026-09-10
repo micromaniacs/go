@@ -1,0 +1,59 @@
+name: docker
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # daily 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Resolve image tags
+        run: |
+          GO_VERSION="$(sed -n 's/^ARG GO_VERSION=//p' Dockerfile)"
+          echo "GO_MAJOR=${GO_VERSION%%.*}" >> "$GITHUB_ENV"
+          echo "GO_MINOR=${GO_VERSION%.*}" >> "$GITHUB_ENV"
+          echo "GO_FULL=${GO_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase repository name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ env.GO_MAJOR }}
+            ${{ env.IMAGE }}:${{ env.GO_MINOR }}
+            ${{ env.IMAGE }}:${{ env.GO_FULL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test image
+        run: docker run --rm "${IMAGE}:latest" sh -c 'go version && golangci-lint version && make --version && gcc --version && node --version && npm --version && npx --version && prettier --version && git --version'
+
+      - name: Clean up untagged image versions
+        uses: dataaxiom/ghcr-cleanup-action@v1
