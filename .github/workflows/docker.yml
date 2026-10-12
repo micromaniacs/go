@@ -19,13 +19,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Discover latest stable Go release
+      - name: Discover latest toolchain versions
         run: |
           GO_FULL="$(curl -fsSL 'https://go.dev/dl/?mode=json' \
             | jq -r '[.[] | select(.stable == true) | .version | ltrimstr("go")] | max_by(split(".") | map(tonumber))')"
           echo "GO_MAJOR=${GO_FULL%%.*}" >> "$GITHUB_ENV"
           echo "GO_MINOR=${GO_FULL%.*}" >> "$GITHUB_ENV"
           echo "GO_FULL=${GO_FULL}" >> "$GITHUB_ENV"
+          LINT_VERSION="$(curl -fsSL \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'Authorization: Bearer ${{ github.token }}' \
+            'https://api.github.com/repos/golangci/golangci-lint/releases/latest' \
+            | jq -r '.tag_name')"
+          echo "LINT_VERSION=${LINT_VERSION}" >> "$GITHUB_ENV"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -43,17 +49,40 @@ jobs:
       - name: Lowercase repository name
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
-      - name: Check if image version already published
-        id: published
+      - name: Decide what to build
+        id: decide
         run: |
           if docker buildx imagetools inspect "${IMAGE}:${GO_FULL}" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
+            PUBLISHED_LINT="$(docker buildx imagetools inspect \
+              --format '{{ index (index .Image "linux/amd64").Config.Labels "io.micromaniacs.golangci-lint" }}' \
+              "${IMAGE}:${GO_FULL}" 2>/dev/null || true)"
+            if [ "${PUBLISHED_LINT}" = "${LINT_VERSION}" ]; then
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # Same Go, newer lint: refresh floating tags only.
+            {
+              echo "build=true"
+              echo "tags<<EOF"
+              echo "${IMAGE}:latest"
+              echo "${IMAGE}:${GO_MAJOR}"
+              echo "${IMAGE}:${GO_MINOR}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "build=true"
+              echo "tags<<EOF"
+              echo "${IMAGE}:latest"
+              echo "${IMAGE}:${GO_MAJOR}"
+              echo "${IMAGE}:${GO_MINOR}"
+              echo "${IMAGE}:${GO_FULL}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build and push
-        if: steps.published.outputs.exists == 'false'
+        if: steps.decide.outputs.build == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -62,11 +91,8 @@ jobs:
           provenance: false
           build-args: |
             GO_VERSION=${{ env.GO_FULL }}
-          tags: |
-            ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:${{ env.GO_MAJOR }}
-            ${{ env.IMAGE }}:${{ env.GO_MINOR }}
-            ${{ env.IMAGE }}:${{ env.GO_FULL }}
+            GOLANGCI_LINT_VERSION=${{ env.LINT_VERSION }}
+          tags: ${{ steps.decide.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

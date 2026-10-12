@@ -21,13 +21,15 @@ Published to GHCR as `ghcr.io/micromaniacs/go`:
   and pushed exactly once and never re-pointed; `latest`, major and minor
   track the newest matching version
 - Multi-arch: `linux/amd64` and `linux/arm64`
-- Debian trixie slim based; the golangci-lint version is pinned via
-  `ARG GOLANGCI_LINT_VERSION` in the `Dockerfile` (bump it there);
-  `ARG GO_VERSION` only pins the local build default
+- Debian trixie slim based; CI always builds with the newest stable Go and
+  golangci-lint releases; the `ARG` defaults in the `Dockerfile` only apply
+  to local builds
 - A daily CI build at 03:00 UTC (also manually triggerable) discovers the
-  newest stable Go release and publishes it once if its full-version tag
-  is not published yet. Untagged leftover image versions are deleted
-  automatically by the workflow
+  newest stable Go and golangci-lint releases and publishes an image for
+  a new Go version; a golangci-lint-only update refreshes the floating
+  `latest`, major and minor tags while full-version tags stay frozen.
+  Untagged leftover image versions are deleted automatically by the
+  workflow
 
 ## License
 

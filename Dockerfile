@@ -1,4 +1,4 @@
-ARG GO_VERSION=1.27.1
+ARG GO_VERSION=1.27.2
 ARG NODE_IMAGE=docker.io/library/node:trixie-slim
 
 FROM ${NODE_IMAGE} AS node
@@ -7,7 +7,7 @@ FROM docker.io/library/golang:${GO_VERSION}-trixie AS go
 
 FROM docker.io/library/debian:trixie-slim
 
-ARG GOLANGCI_LINT_VERSION=v2.13.2
+ARG GOLANGCI_LINT_VERSION=v2.14.0
 
 ENV GOPATH=/go \
     GOTOOLCHAIN=local \
@@ -38,6 +38,7 @@ RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 LABEL org.opencontainers.image.title="go" \
       org.opencontainers.image.source="https://github.com/micromaniacs/go" \
       org.opencontainers.image.description="Docker image for building Go applications in Forgejo/Gitea Actions with golangci-lint, Node.js and Prettier" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="MIT" \
+      io.micromaniacs.golangci-lint="${GOLANGCI_LINT_VERSION}"
 
 WORKDIR /tmp
