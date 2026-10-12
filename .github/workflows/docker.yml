@@ -51,43 +51,18 @@ jobs:
       - name: Lowercase repository name
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
-      - name: Decide what to build
-        id: decide
+      - name: Check if this toolchain combination is already published
+        id: published
         run: |
-          if docker buildx imagetools inspect "${IMAGE}:${GO_FULL}" >/dev/null 2>&1; then
-            PUBLISHED_LINT="$(docker buildx imagetools inspect \
-              --format '{{ index (index .Image "linux/amd64").Config.Labels "io.micromaniacs.golangci-lint" }}' \
-              "${IMAGE}:${GO_FULL}" 2>/dev/null || true)"
-            PUBLISHED_PRETTIER="$(docker buildx imagetools inspect \
-              --format '{{ index (index .Image "linux/amd64").Config.Labels "io.micromaniacs.prettier" }}' \
-              "${IMAGE}:${GO_FULL}" 2>/dev/null || true)"
-            if [ "${PUBLISHED_LINT}" = "${LINT_VERSION}" ] && [ "${PUBLISHED_PRETTIER}" = "${PRETTIER_VERSION}" ]; then
-              echo "build=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            # Same Go, newer tools: refresh floating tags only.
-            {
-              echo "build=true"
-              echo "tags<<EOF"
-              echo "${IMAGE}:latest"
-              echo "${IMAGE}:${GO_MAJOR}"
-              echo "${IMAGE}:${GO_MINOR}"
-              echo "EOF"
-            } >> "$GITHUB_OUTPUT"
+          COMBO_TAG="${GO_FULL}-lint${LINT_VERSION}-prettier${PRETTIER_VERSION}"
+          if docker buildx imagetools inspect "${IMAGE}:${COMBO_TAG}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            {
-              echo "build=true"
-              echo "tags<<EOF"
-              echo "${IMAGE}:latest"
-              echo "${IMAGE}:${GO_MAJOR}"
-              echo "${IMAGE}:${GO_MINOR}"
-              echo "${IMAGE}:${GO_FULL}"
-              echo "EOF"
-            } >> "$GITHUB_OUTPUT"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build and push
-        if: steps.decide.outputs.build == 'true'
+        if: steps.published.outputs.exists == 'false'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -98,7 +73,12 @@ jobs:
             GO_VERSION=${{ env.GO_FULL }}
             GOLANGCI_LINT_VERSION=${{ env.LINT_VERSION }}
             PRETTIER_VERSION=${{ env.PRETTIER_VERSION }}
-          tags: ${{ steps.decide.outputs.tags }}
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ env.GO_MAJOR }}
+            ${{ env.IMAGE }}:${{ env.GO_MINOR }}
+            ${{ env.IMAGE }}:${{ env.GO_FULL }}
+            ${{ env.IMAGE }}:${{ env.GO_FULL }}-lint${{ env.LINT_VERSION }}-prettier${{ env.PRETTIER_VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
