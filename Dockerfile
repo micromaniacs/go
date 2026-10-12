@@ -8,6 +8,7 @@ FROM docker.io/library/golang:${GO_VERSION}-trixie AS go
 FROM docker.io/library/debian:trixie-slim
 
 ARG GOLANGCI_LINT_VERSION=v2.14.0
+ARG PRETTIER_VERSION=3.9.10
 
 ENV GOPATH=/go \
     GOTOOLCHAIN=local \
@@ -32,13 +33,14 @@ COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 
 RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
  && ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
- && npm install -g prettier \
+ && npm install -g prettier@${PRETTIER_VERSION} \
  && rm -rf /root/.npm
 
 LABEL org.opencontainers.image.title="go" \
       org.opencontainers.image.source="https://github.com/micromaniacs/go" \
       org.opencontainers.image.description="Docker image for building Go applications in Forgejo/Gitea Actions with golangci-lint, Node.js and Prettier" \
       org.opencontainers.image.licenses="MIT" \
-      io.micromaniacs.golangci-lint="${GOLANGCI_LINT_VERSION}"
+      io.micromaniacs.golangci-lint="${GOLANGCI_LINT_VERSION}" \
+      io.micromaniacs.prettier="${PRETTIER_VERSION}"
 
 WORKDIR /tmp

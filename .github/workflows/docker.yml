@@ -32,6 +32,8 @@ jobs:
             'https://api.github.com/repos/golangci/golangci-lint/releases/latest' \
             | jq -r '.tag_name')"
           echo "LINT_VERSION=${LINT_VERSION}" >> "$GITHUB_ENV"
+          PRETTIER_VERSION="$(curl -fsSL 'https://registry.npmjs.org/prettier/latest' | jq -r '.version')"
+          echo "PRETTIER_VERSION=${PRETTIER_VERSION}" >> "$GITHUB_ENV"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -56,11 +58,14 @@ jobs:
             PUBLISHED_LINT="$(docker buildx imagetools inspect \
               --format '{{ index (index .Image "linux/amd64").Config.Labels "io.micromaniacs.golangci-lint" }}' \
               "${IMAGE}:${GO_FULL}" 2>/dev/null || true)"
-            if [ "${PUBLISHED_LINT}" = "${LINT_VERSION}" ]; then
+            PUBLISHED_PRETTIER="$(docker buildx imagetools inspect \
+              --format '{{ index (index .Image "linux/amd64").Config.Labels "io.micromaniacs.prettier" }}' \
+              "${IMAGE}:${GO_FULL}" 2>/dev/null || true)"
+            if [ "${PUBLISHED_LINT}" = "${LINT_VERSION}" ] && [ "${PUBLISHED_PRETTIER}" = "${PRETTIER_VERSION}" ]; then
               echo "build=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            # Same Go, newer lint: refresh floating tags only.
+            # Same Go, newer tools: refresh floating tags only.
             {
               echo "build=true"
               echo "tags<<EOF"
@@ -92,6 +97,7 @@ jobs:
           build-args: |
             GO_VERSION=${{ env.GO_FULL }}
             GOLANGCI_LINT_VERSION=${{ env.LINT_VERSION }}
+            PRETTIER_VERSION=${{ env.PRETTIER_VERSION }}
           tags: ${{ steps.decide.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
