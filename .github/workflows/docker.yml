@@ -19,12 +19,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Resolve image tags
+      - name: Discover latest stable Go release
         run: |
-          GO_VERSION="$(sed -n 's/^ARG GO_VERSION=//p' Dockerfile)"
-          echo "GO_MAJOR=${GO_VERSION%%.*}" >> "$GITHUB_ENV"
-          echo "GO_MINOR=${GO_VERSION%.*}" >> "$GITHUB_ENV"
-          echo "GO_FULL=${GO_VERSION}" >> "$GITHUB_ENV"
+          GO_FULL="$(curl -fsSL 'https://go.dev/dl/?mode=json' \
+            | jq -r '[.[] | select(.stable == true) | .version | ltrimstr("go")] | max_by(split(".") | map(tonumber))')"
+          echo "GO_MAJOR=${GO_FULL%%.*}" >> "$GITHUB_ENV"
+          echo "GO_MINOR=${GO_FULL%.*}" >> "$GITHUB_ENV"
+          echo "GO_FULL=${GO_FULL}" >> "$GITHUB_ENV"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -59,6 +60,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: false
+          build-args: |
+            GO_VERSION=${{ env.GO_FULL }}
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ env.GO_MAJOR }}
