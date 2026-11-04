@@ -17,7 +17,7 @@ jobs:
 
       - name: Resolve image tags
         run: |
-          GO_VERSION="$(sed -n 's/^ARG GO_VERSION=//p' Dockerfile)"
+          GO_VERSION="$(docker run --rm docker.io/library/golang:1-trixie go version | sed 's/^go version go//; s/ .*//')"
           echo "GO_MAJOR=${GO_VERSION%%.*}" >> "$GITHUB_ENV"
           echo "GO_MINOR=${GO_VERSION%.*}" >> "$GITHUB_ENV"
           echo "GO_FULL=${GO_VERSION}" >> "$GITHUB_ENV"
@@ -53,7 +53,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Smoke test image
-        run: docker run --rm "${IMAGE}:latest" sh -c 'go version && golangci-lint version && make --version && gcc --version && node --version && npm --version && npx --version && prettier --version && git --version'
+        run: docker run --rm "${IMAGE}:${GO_FULL}" sh -c 'go version && golangci-lint version && buf --version && protoc --version && make --version && gcc --version && node --version && npm --version && npx --version && prettier --version && git --version'
 
       - name: Clean up untagged image versions
         uses: dataaxiom/ghcr-cleanup-action@v1
