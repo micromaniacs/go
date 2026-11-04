@@ -5,6 +5,10 @@ on:
     - cron: "0 3 * * *" # daily 03:00 UTC
   workflow_dispatch:
 
+concurrency:
+  group: docker-build
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -44,6 +48,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
+          provenance: false
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ env.GO_MAJOR }}
@@ -57,3 +62,5 @@ jobs:
 
       - name: Clean up untagged image versions
         uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          delete-untagged: true
